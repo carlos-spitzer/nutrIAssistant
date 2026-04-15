@@ -1,0 +1,31 @@
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import { FamilyMember } from '../../types/profiles'
+
+const KEY_PROFILES = 'family_profiles'
+const KEY_FAMILY_NAME = 'family_name'
+const KEY_APP_INITIALIZED = 'app_initialized'
+
+export async function loadProfiles(): Promise<FamilyMember[]> {
+  const json = await AsyncStorage.getItem(KEY_PROFILES)
+  return json ? JSON.parse(json) : []
+}
+
+export async function saveProfiles(profiles: FamilyMember[]): Promise<void> {
+  await AsyncStorage.setItem(KEY_PROFILES, JSON.stringify(profiles))
+}
+
+export async function loadFamilyName(): Promise<string> {
+  return (await AsyncStorage.getItem(KEY_FAMILY_NAME)) ?? 'Your Family'
+}
+
+export async function saveFamilyName(name: string): Promise<void> {
+  await AsyncStorage.setItem(KEY_FAMILY_NAME, name)
+}
+
+export async function isAppInitialized(): Promise<boolean> {
+  return (await AsyncStorage.getItem(KEY_APP_INITIALIZED)) === 'true'
+}
+
+export async function markAppInitialized(): Promise<void> {
+  await AsyncStorage.setItem(KEY_APP_INITIALIZED, 'true')
+}

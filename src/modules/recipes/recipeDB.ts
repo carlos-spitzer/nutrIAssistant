@@ -1,0 +1,173 @@
+import { getDatabase } from '../../db/database'
+import { Recipe } from '../../types/recipes'
+
+function rowToRecipe(row: Record<string, unknown>): Recipe {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    nameEs: row.name_es as string | undefined,
+    category: row.category as Recipe['category'],
+    cuisine: row.cuisine as string,
+    cuisineFlag: row.cuisine_flag as string | undefined,
+    instructions: JSON.parse(row.instructions as string),
+    instructionsEs: row.instructions_es ? JSON.parse(row.instructions_es as string) : undefined,
+    ingredients: JSON.parse(row.ingredients as string),
+    prepTime: row.prep_time as number,
+    cookTime: row.cook_time as number,
+    servings: row.servings as number,
+    imageUrl: row.image_url as string | undefined,
+    localImagePath: row.local_image_path as string | undefined,
+    sourceApi: row.source_api as Recipe['sourceApi'],
+    sourceId: row.source_id as string | undefined,
+    nutritionalInfo: JSON.parse(row.nutritional_info as string),
+    allergens: JSON.parse(row.allergens as string),
+    tags: JSON.parse(row.tags as string),
+    familyCompatibility: row.family_compatibility
+      ? JSON.parse(row.family_compatibility as string)
+      : undefined,
+    nutriscore: row.nutriscore as Recipe['nutriscore'],
+    isFavorite: (row.is_favorite as number) === 1,
+    createdAt: row.created_at as string,
+    updatedAt: row.updated_at as string,
+  }
+}
+
+function recipeToRow(r: Recipe) {
+  return [
+    r.id, r.name, r.nameEs ?? null, r.category, r.cuisine, r.cuisineFlag ?? null,
+    JSON.stringify(r.instructions), r.instructionsEs ? JSON.stringify(r.instructionsEs) : null,
+    JSON.stringify(r.ingredients), r.prepTime, r.cookTime, r.servings,
+    r.imageUrl ?? null, r.localImagePath ?? null, r.sourceApi ?? null, r.sourceId ?? null,
+    JSON.stringify(r.nutritionalInfo), JSON.stringify(r.allergens), JSON.stringify(r.tags),
+    r.familyCompatibility ? JSON.stringify(r.familyCompatibility) : null,
+    r.nutriscore ?? null, r.isFavorite ? 1 : 0, r.createdAt, r.updatedAt,
+  ]
+}
+
+export async function upsertRecipe(recipe: Recipe): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync(
+    `INSERT OR REPLACE INTO recipes (
+      id, name, name_es, category, cuisine, cuisine_flag,
+      instructions, instructions_es, ingredients,
+      prep_time, cook_time, servings,
+      image_url, local_image_path, source_api, source_id,
+      nutritional_info, allergens, tags, family_compatibility,
+      nutriscore, is_favorite, created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    recipeToRow(recipe)
+  )
+}
+
+export async function batchUpsertRecipes(recipes: Recipe[]): Promise<void> {
+  const db = await getDatabase()
+  await db.withTransactionAsync(async () => {
+    for (const recipe of recipes) {
+      await db.runAsync(
+        `INSERT OR REPLACE INTO recipes (
+          id, name, name_es, category, cuisine, cuisine_flag,
+          instructions, instructions_es, ingredients,
+          prep_time, cook_time, servings,
+          image_url, local_image_path, source_api, source_id,
+          nutritional_info, allergens, tags, family_compatibility,
+          nutriscore, is_favorite, created_at, updated_at
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        recipeToRow(recipe)
+      )
+    }
+  })
+}
+
+export async function getRecipeById(id: string): Promise<Recipe | null> {
+  const db = await getDatabase()
+  const row = await db.getFirstAsync<Record<string, unknown>>(
+    'SELECT * FROM recipes WHERE id = ?', [id]
+  )
+  return row ? rowToRecipe(row) : null
+}
+
+export async function searchRecipes(
+  query: string,
+  limit = 20
+): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes WHERE name LIKE ? OR cuisine LIKE ? LIMIT ?`,
+    [`%${query}%`, `%${query}%`, limit]
+  )
+  return rows.map(rowToRecipe)
+}
+
+export async function getRecipesByCategory(
+  category: string,
+  limit = 20
+): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM recipes WHERE category = ? LIMIT ?',
+    [category, limit]
+  )
+  return rows.map(rowToRecipe)
+}
+
+export async function getRecipesByCuisine(
+  cuisine: string,
+  limit = 20
+): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM recipes WHERE cuisine LIKE ? LIMIT ?',
+    [`%${cuisine}%`, limit]
+  )
+  return rows.map(rowToRecipe)
+}
+
+export async function getAllRecipes(limit = 50, offset = 0): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    'SELECT * FROM recipes ORDER BY updated_at DESC LIMIT ? OFFSET ?',
+    [limit, offset]
+  )
+  return rows.map(rowToRecipe)
+}
+
+export async function getRecipeCount(): Promise<number> {
+  const db = await getDatabase()
+  const row = await db.getFirstAsync<{ count: number }>(
+    'SELECT COUNT(*) as count FROM recipes'
+  )
+  return row?.count ?? 0
+}
+
+export async function toggleFavorite(id: string): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync(
+    'UPDATE recipes SET is_favorite = CASE WHEN is_favorite = 1 THEN 0 ELSE 1 END WHERE id = ?',
+    [id]
+  )
+}
+
+export async function updateRecipeCompatibility(
+  id: string,
+  compatibility: Record<string, unknown>
+): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync(
+    'UPDATE recipes SET family_compatibility = ?, updated_at = ? WHERE id = ?',
+    [JSON.stringify(compatibility), new Date().toISOString(), id]
+  )
+}
+
+export async function getRandomRecipes(
+  limit = 6,
+  category?: string
+): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const where = category ? 'WHERE category = ?' : ''
+  const params = category ? [category, limit] : [limit]
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes ${where} ORDER BY RANDOM() LIMIT ?`,
+    params
+  )
+  return rows.map(rowToRecipe)
+}

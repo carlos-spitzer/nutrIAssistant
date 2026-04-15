@@ -1,0 +1,322 @@
+import React, { useState } from 'react'
+import {
+  Alert,
+  Image,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useGroceries } from '../../src/modules/groceries/useGroceries'
+import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
+import { EmptyState } from '../../src/components/layout/EmptyState'
+import { GroceryItem } from '../../src/types/groceries'
+
+const RETAILERS = [
+  { key: 'amazon',    name: 'Amazon',    logo: require('../../assets/retailers/amazon.png'),    active: true  },
+  { key: 'mercadona', name: 'Mercadona', logo: require('../../assets/retailers/mercadona.png'), active: false },
+  { key: 'carrefour', name: 'Carrefour', logo: require('../../assets/retailers/carrefour.png'), active: false },
+  { key: 'alcampo',   name: 'Alcampo',   logo: require('../../assets/retailers/Alcampo.png'),   active: false },
+  { key: 'dia',       name: 'DIA',       logo: require('../../assets/retailers/dia.png'),       active: false },
+  { key: 'lidl',      name: 'Lidl',      logo: require('../../assets/retailers/lidl.png'),      active: false },
+]
+
+export default function GroceriesScreen() {
+  const {
+    activeItems,
+    purchasedItems,
+    isLoading,
+    addItem,
+    togglePurchased,
+    removeItem,
+    clearPurchased,
+    exportToAmazon,
+    grouped,
+  } = useGroceries()
+
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newItemName, setNewItemName] = useState('')
+  const [newItemQty, setNewItemQty] = useState('1')
+  const [newItemUnit, setNewItemUnit] = useState('units')
+  const [showPurchased, setShowPurchased] = useState(false)
+
+  const handleAdd = async () => {
+    if (!newItemName.trim()) return
+    await addItem(newItemName.trim(), parseFloat(newItemQty) || 1, newItemUnit)
+    setNewItemName('')
+    setNewItemQty('1')
+    setShowAddModal(false)
+  }
+
+  const groups = grouped()
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.title}>Lista de la Compra</Text>
+        <View style={styles.headerActions}>
+          <Text style={styles.count}>{activeItems.length} artículo{activeItems.length !== 1 ? 's' : ''}</Text>
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {/* Shopping Groups */}
+        {groups.length === 0 && !isLoading ? (
+          <EmptyState
+            emoji="🛒"
+            title="Lista de compra vacía"
+            description="Añade artículos manualmente o genera un plan de comidas para rellenarla."
+            actionLabel="+ Añadir artículo"
+            onAction={() => setShowAddModal(true)}
+          />
+        ) : (
+          groups.map((group) => (
+            <View key={group.category} style={styles.group}>
+              <Text style={styles.groupLabel}>{group.label}</Text>
+              {group.items.map((item) => (
+                <GroceryRow
+                  key={item.id}
+                  item={item}
+                  onToggle={() => togglePurchased(item.id)}
+                  onDelete={() => {
+                    Alert.alert('Eliminar artículo', `¿Eliminar "${item.name}"?`, [
+                      { text: 'Cancelar', style: 'cancel' },
+                      { text: 'Eliminar', style: 'destructive', onPress: () => removeItem(item.id) },
+                    ])
+                  }}
+                />
+              ))}
+            </View>
+          ))
+        )}
+
+        {/* Purchased Section */}
+        {purchasedItems.length > 0 && (
+          <View style={styles.purchasedSection}>
+            <TouchableOpacity
+              style={styles.purchasedToggle}
+              onPress={() => setShowPurchased(!showPurchased)}
+            >
+              <Text style={styles.purchasedToggleText}>
+                {showPurchased ? '▼' : '▶'} Comprado ({purchasedItems.length})
+              </Text>
+              {showPurchased && (
+                <TouchableOpacity onPress={clearPurchased}>
+                  <Text style={styles.clearText}>Limpiar todo</Text>
+                </TouchableOpacity>
+              )}
+            </TouchableOpacity>
+            {showPurchased &&
+              purchasedItems.map((item) => (
+                <GroceryRow
+                  key={item.id}
+                  item={item}
+                  onToggle={() => togglePurchased(item.id)}
+                  onDelete={() => removeItem(item.id)}
+                  purchased
+                />
+              ))}
+          </View>
+        )}
+
+        {/* Retailer Export */}
+        {activeItems.length > 0 && (
+          <View style={styles.retailerSection}>
+            <Text style={styles.retailerTitle}>Comprar online</Text>
+            <View style={styles.retailerGrid}>
+              {RETAILERS.map((r) => (
+                <TouchableOpacity
+                  key={r.key}
+                  style={[styles.retailerCard, !r.active && styles.retailerCardDisabled]}
+                  onPress={r.active ? exportToAmazon : () => Alert.alert('Próximamente', `La integración con ${r.name} llega pronto.`)}
+                >
+                  <Image
+                    source={r.logo}
+                    style={styles.retailerLogo}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.retailerName}>{r.name}</Text>
+                  {!r.active && (
+                    <View style={styles.comingSoonBadge}>
+                      <Text style={styles.comingSoonText}>Pronto</Text>
+                    </View>
+                  )}
+                  {r.active && (
+                    <Text style={styles.shopBtn}>Comprar →</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
+
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      {/* FAB */}
+      <TouchableOpacity style={styles.fab} onPress={() => setShowAddModal(true)}>
+        <Text style={styles.fabText}>+</Text>
+      </TouchableOpacity>
+
+      {/* Add Item Modal */}
+      <Modal
+        visible={showAddModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowAddModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Añadir artículo</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="Nombre del artículo (ej. Tomates)"
+              value={newItemName}
+              onChangeText={setNewItemName}
+              autoFocus
+              returnKeyType="next"
+            />
+            <View style={styles.modalRow}>
+              <TextInput
+                style={[styles.modalInput, styles.modalInputSmall]}
+                placeholder="Cant."
+                value={newItemQty}
+                onChangeText={setNewItemQty}
+                keyboardType="numeric"
+              />
+              <TextInput
+                style={[styles.modalInput, styles.modalInputSmall]}
+                placeholder="Unidad"
+                value={newItemUnit}
+                onChangeText={setNewItemUnit}
+              />
+            </View>
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowAddModal(false)}>
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.addBtn} onPress={handleAdd}>
+                <Text style={styles.addBtnText}>Añadir a la lista</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </SafeAreaView>
+  )
+}
+
+function GroceryRow({
+  item,
+  onToggle,
+  onDelete,
+  purchased = false,
+}: {
+  item: GroceryItem
+  onToggle: () => void
+  onDelete: () => void
+  purchased?: boolean
+}) {
+  return (
+    <TouchableOpacity style={styles.groceryRow} onPress={onToggle} onLongPress={onDelete}>
+      <View style={[styles.checkbox, item.isPurchased && styles.checkboxChecked]}>
+        {item.isPurchased && <Text style={styles.checkmark}>✓</Text>}
+      </View>
+      <View style={styles.groceryInfo}>
+        <Text style={[styles.groceryName, purchased && styles.groceryNamePurchased]}>
+          {item.name}
+        </Text>
+        <Text style={styles.groceryMeta}>{item.quantity} {item.unit}</Text>
+      </View>
+      {item.fromMealPlan && (
+        <View style={styles.planBadge}>
+          <Text style={styles.planBadgeText}>📅</Text>
+        </View>
+      )}
+    </TouchableOpacity>
+  )
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: Colors.cream },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm,
+  },
+  title: { ...Typography.heading1, color: Colors.warmCharcoal },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm },
+  count: { ...Typography.body, color: Colors.light.textSecondary },
+  scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
+  group: { marginBottom: Spacing.md },
+  groupLabel: {
+    ...Typography.overline, color: Colors.light.textSecondary,
+    marginBottom: Spacing.sm, paddingLeft: Spacing.xs,
+  },
+  groceryRow: {
+    flexDirection: 'row', alignItems: 'center', gap: Spacing.sm,
+    backgroundColor: Colors.white, borderRadius: BorderRadius.md,
+    padding: Spacing.sm, marginBottom: Spacing.xs, ...Shadows.subtle,
+  },
+  checkbox: {
+    width: 24, height: 24, borderRadius: 12, borderWidth: 2,
+    borderColor: Colors.light.border, alignItems: 'center', justifyContent: 'center',
+  },
+  checkboxChecked: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
+  checkmark: { color: Colors.white, fontSize: 12, fontWeight: 'bold' },
+  groceryInfo: { flex: 1 },
+  groceryName: { ...Typography.bodyLarge, color: Colors.warmCharcoal },
+  groceryNamePurchased: { textDecorationLine: 'line-through', color: Colors.light.textMuted },
+  groceryMeta: { ...Typography.caption, color: Colors.light.textSecondary },
+  planBadge: { padding: Spacing.xs },
+  planBadgeText: { fontSize: 14 },
+  purchasedSection: { marginBottom: Spacing.md },
+  purchasedToggle: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingVertical: Spacing.sm,
+  },
+  purchasedToggleText: { ...Typography.bodyLarge, color: Colors.light.textSecondary, fontFamily: Typography.heading3.fontFamily },
+  clearText: { ...Typography.body, color: Colors.errorRed },
+  retailerSection: { marginBottom: Spacing.lg },
+  retailerTitle: { ...Typography.heading2, color: Colors.warmCharcoal, marginBottom: Spacing.sm },
+  retailerGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  retailerCard: {
+    width: '30%', backgroundColor: Colors.white, borderRadius: BorderRadius.md,
+    padding: Spacing.md, alignItems: 'center', gap: Spacing.sm, ...Shadows.subtle,
+    borderWidth: 1, borderColor: Colors.light.border,
+  },
+  retailerCardDisabled: { opacity: 0.65 },
+  retailerLogo: { width: 48, height: 48, borderRadius: BorderRadius.sm },
+  retailerName: { ...Typography.caption, color: Colors.warmCharcoal, textAlign: 'center' },
+  comingSoonBadge: { backgroundColor: Colors.goldenAmber, paddingHorizontal: 6, paddingVertical: 2, borderRadius: BorderRadius.pill },
+  comingSoonText: { ...Typography.overline, color: Colors.white, fontSize: 8 },
+  shopBtn: { ...Typography.caption, color: Colors.healthGreen, fontFamily: Typography.body.fontFamily },
+  fab: {
+    position: 'absolute', right: Spacing.md, bottom: 90,
+    width: 56, height: 56, borderRadius: 28, backgroundColor: Colors.healthGreen,
+    alignItems: 'center', justifyContent: 'center', ...Shadows.elevated,
+  },
+  fabText: { color: Colors.white, fontSize: 28, lineHeight: 30 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalSheet: {
+    backgroundColor: Colors.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: Spacing.xl, gap: Spacing.md,
+  },
+  modalTitle: { ...Typography.heading2, color: Colors.warmCharcoal },
+  modalInput: {
+    backgroundColor: Colors.white, borderRadius: BorderRadius.md,
+    padding: Spacing.sm, ...Typography.bodyLarge, color: Colors.warmCharcoal,
+    borderWidth: 1, borderColor: Colors.light.border,
+  },
+  modalInputSmall: { flex: 1 },
+  modalRow: { flexDirection: 'row', gap: Spacing.sm },
+  modalActions: { flexDirection: 'row', gap: Spacing.sm },
+  cancelBtn: { flex: 1, padding: Spacing.sm, borderRadius: BorderRadius.pill, backgroundColor: Colors.softMint, alignItems: 'center' },
+  cancelBtnText: { ...Typography.bodyLarge, color: Colors.warmCharcoal },
+  addBtn: { flex: 2, padding: Spacing.sm, borderRadius: BorderRadius.pill, backgroundColor: Colors.healthGreen, alignItems: 'center' },
+  addBtnText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+})
