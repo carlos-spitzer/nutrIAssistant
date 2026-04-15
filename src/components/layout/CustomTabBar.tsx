@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react'
 import {
   Animated,
   Easing,
+  Image,
   Platform,
   StyleSheet,
   Text,
@@ -108,7 +109,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
               onPress={openAssistant}
               activeOpacity={0.85}
             >
-              <Text style={styles.aiIcon}>🤖</Text>
+              <Image
+                source={require('../../../assets/images/icon.png')}
+                style={styles.aiLogo}
+                resizeMode="cover"
+              />
             </TouchableOpacity>
           </View>
 
@@ -231,7 +236,9 @@ const styles = StyleSheet.create({
     bottom: 12,
     ...Shadows.elevated,
   },
-  aiIcon: {
-    fontSize: 24,
+  aiLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
   },
 })

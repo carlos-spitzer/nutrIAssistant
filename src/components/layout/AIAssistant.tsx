@@ -7,6 +7,7 @@ import React, {
 } from 'react'
 import {
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
@@ -214,7 +215,7 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
         <View style={[viewStyles.messageRow, isUser && viewStyles.messageRowUser]}>
           {!isUser && (
             <View style={viewStyles.botAvatar}>
-              <Text style={textStyles.botAvatarText}>🤖</Text>
+              <Image source={require('../../../assets/images/icon.png')} style={viewStyles.botAvatarLogo} />
             </View>
           )}
           <View style={[viewStyles.bubble, isUser ? viewStyles.bubbleUser : viewStyles.bubbleBot]}>
@@ -248,7 +249,8 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
           {/* Header */}
           <View style={viewStyles.header}>
             <View style={viewStyles.headerLeft}>
-              <Text style={textStyles.title}>🤖 NutriBot</Text>
+              <Image source={require('../../../assets/images/icon.png')} style={viewStyles.headerLogo} />
+              <Text style={textStyles.title}>NutrIAssistant</Text>
               <View style={viewStyles.statusDot} />
             </View>
             <View style={viewStyles.headerRight}>
@@ -298,7 +300,8 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
               keyExtractor={(item) => item.id}
               renderItem={renderMessage}
               contentContainerStyle={viewStyles.messageList}
-              showsVerticalScrollIndicator={false}
+              showsVerticalScrollIndicator={true}
+              indicatorStyle="black"
             />
           )}
 
@@ -369,7 +372,9 @@ const viewStyles = StyleSheet.create({
   messageList: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm } as ViewStyle,
   messageRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm, alignItems: 'flex-end' } as ViewStyle,
   messageRowUser: { flexDirection: 'row-reverse' } as ViewStyle,
-  botAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.softMint, alignItems: 'center', justifyContent: 'center' } as ViewStyle,
+  headerLogo: { width: 28, height: 28, borderRadius: 6 } as ViewStyle,
+  botAvatar: { width: 32, height: 32, borderRadius: 16, backgroundColor: Colors.softMint, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' } as ViewStyle,
+  botAvatarLogo: { width: 32, height: 32, borderRadius: 16 } as ViewStyle,
   bubble: { maxWidth: '75%', padding: Spacing.sm, borderRadius: BorderRadius.lg, gap: 4 } as ViewStyle,
   bubbleUser: { backgroundColor: Colors.healthGreen, borderBottomRightRadius: 4 } as ViewStyle,
   bubbleBot: { backgroundColor: Colors.softMint, borderBottomLeftRadius: 4, ...Shadows.subtle } as ViewStyle,
@@ -399,7 +404,6 @@ const textStyles = StyleSheet.create({
   welcomeTitle: { ...Typography.heading1, color: Colors.warmCharcoal, textAlign: 'center' } as TextStyle,
   welcomeText: { ...Typography.body, color: Colors.light.textSecondary, textAlign: 'center' } as TextStyle,
   suggestionText: { ...Typography.body, color: Colors.healthGreen } as TextStyle,
-  botAvatarText: { fontSize: 18 } as TextStyle,
   botName: { ...Typography.overline, color: Colors.forestGreen } as TextStyle,
   messageText: { ...Typography.body, color: Colors.warmCharcoal } as TextStyle,
   messageTextUser: { color: Colors.white } as TextStyle,

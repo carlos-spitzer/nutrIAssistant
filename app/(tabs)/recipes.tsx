@@ -39,7 +39,6 @@ const CATEGORY_FILTERS: { key: RecipeCategory | 'all'; label: string }[] = [
   { key: 'breakfast', label: '🌅 Desayuno' },
   { key: 'lunch', label: '☀️ Comida' },
   { key: 'dinner', label: '🌙 Cena' },
-  { key: 'dessert', label: '🍰 Postre' },
 ]
 
 export default function RecipesScreen() {
@@ -100,12 +99,7 @@ export default function RecipesScreen() {
       </View>
 
       {/* Filtros por categoría */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScrollView}
-        contentContainerStyle={styles.filterStrip}
-      >
+      <View style={styles.filterRow}>
         {CATEGORY_FILTERS.map((f) => (
           <TouchableOpacity
             key={f.key}
@@ -117,7 +111,7 @@ export default function RecipesScreen() {
             </Text>
           </TouchableOpacity>
         ))}
-      </ScrollView>
+      </View>
 
       {/* Cocinas del mundo */}
       <View style={styles.cuisineSection}>
@@ -176,11 +170,18 @@ const styles = StyleSheet.create({
   header: { paddingHorizontal: Spacing.md, paddingTop: Spacing.md, paddingBottom: Spacing.sm },
   title: { ...Typography.heading1, color: Colors.warmCharcoal },
   searchContainer: { paddingHorizontal: Spacing.md, marginBottom: Spacing.sm },
-  filterScrollView: { flexShrink: 0 },
-  filterStrip: { paddingHorizontal: Spacing.md, gap: Spacing.sm, paddingVertical: Spacing.sm, alignItems: 'center' },
+  filterRow: {
+    flexDirection: 'row',
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    gap: Spacing.sm,
+  },
   pill: {
-    paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.pill, backgroundColor: Colors.softMint,
+    flex: 1,
+    paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.pill,
+    backgroundColor: Colors.softMint,
+    alignItems: 'center',
   },
   pillActive: { backgroundColor: Colors.healthGreen },
   pillText: { ...Typography.body, color: Colors.warmCharcoal },
