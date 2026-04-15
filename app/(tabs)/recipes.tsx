@@ -36,9 +36,9 @@ const CUISINE_OPTIONS = [
 
 const CATEGORY_FILTERS: { key: RecipeCategory | 'all'; label: string }[] = [
   { key: 'all', label: 'Todas' },
-  { key: 'breakfast', label: '🌅 Desayuno' },
-  { key: 'lunch', label: '☀️ Comida' },
-  { key: 'dinner', label: '🌙 Cena' },
+  { key: 'breakfast', label: 'Desayuno' },
+  { key: 'lunch', label: 'Comida' },
+  { key: 'dinner', label: 'Cena' },
 ]
 
 export default function RecipesScreen() {

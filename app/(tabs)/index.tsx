@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import {
+  Dimensions,
   FlatList,
   ScrollView,
   StyleSheet,
@@ -7,13 +8,15 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+
+const MEAL_CARD_WIDTH = Math.round(Dimensions.get('window').width * 0.72)
 import { router } from 'expo-router'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { useInventory } from '../../src/modules/inventory/useInventory'
-import { usePlanner } from '../../src/modules/planner/usePlanner'
+import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
-import { isSynced, syncRecipes } from '../../src/modules/recipes/syncRecipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
 import { ProgressRing } from '../../src/components/charts/ProgressRing'
 import { MemberCard } from '../../src/components/cards/MemberCard'
@@ -48,9 +51,6 @@ export default function HomeScreen() {
   const { weekPlans } = usePlanner()
   const { getRandom } = useRecipeDB()
   const [featuredRecipes, setFeaturedRecipes] = useState<Recipe[]>([])
-  const [isSyncing, setIsSyncing] = useState(false)
-  const [syncProgress, setSyncProgress] = useState(0)
-  const [syncMessage, setSyncMessage] = useState('')
 
   const todayStr = new Date().toISOString().split('T')[0]
   const todayPlan = weekPlans.find((p) => p.date === todayStr)
@@ -59,28 +59,9 @@ export default function HomeScreen() {
   })
 
   useEffect(() => {
-    async function checkSync() {
-      try {
-        const synced = await isSynced()
-        if (!synced) {
-          setIsSyncing(true)
-          await syncRecipes((progress, message) => {
-            setSyncProgress(progress)
-            setSyncMessage(message)
-          })
-          setIsSyncing(false)
-        }
-        const random = await getRandom(5)
-        setFeaturedRecipes(random)
-      } catch (e) {
-        console.warn('[Home] Error en sincronización:', e)
-        setIsSyncing(false)
-        // Load whatever is in DB already
-        const random = await getRandom(5)
-        setFeaturedRecipes(random)
-      }
-    }
-    checkSync()
+    getRandom(5).then(setFeaturedRecipes).catch((e) => {
+      console.warn('[Home] Error cargando recetas:', e)
+    })
   }, [])
 
   const lowStockAlerts = getLowStockAlerts()
@@ -88,14 +69,6 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {isSyncing && (
-        <View style={styles.syncBanner}>
-          <Text style={styles.syncText}>
-            📥 {syncMessage || 'Sincronizando recetas...'} {Math.round(syncProgress * 100)}%
-          </Text>
-        </View>
-      )}
-
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         {/* Cabecera */}
         <View style={styles.header}>
@@ -105,10 +78,10 @@ export default function HomeScreen() {
           </View>
           <View style={styles.headerIcons}>
             <TouchableOpacity onPress={() => router.push('/scanner')} style={styles.iconBtn}>
-              <Text style={styles.icon}>📷</Text>
+              <Ionicons name="camera-outline" size={24} color={Colors.warmCharcoal} style={styles.iconInactive} />
             </TouchableOpacity>
             <TouchableOpacity onPress={() => router.push('/settings')} style={styles.iconBtn}>
-              <Text style={styles.icon}>⚙️</Text>
+              <Ionicons name="settings-outline" size={24} color={Colors.warmCharcoal} style={styles.iconInactive} />
             </TouchableOpacity>
           </View>
         </View>
@@ -184,15 +157,17 @@ export default function HomeScreen() {
               keyExtractor={(m) => m}
               contentContainerStyle={styles.stripContent}
               renderItem={({ item: mealType }) => (
-                <MealCard
-                  mealType={mealType}
-                  recipe={todayPlan.meals[mealType]}
-                  members={profiles}
-                  onPress={() => {
-                    const recipe = todayPlan.meals[mealType]
-                    if (recipe) router.push(`/recipe/${recipe.id}`)
-                  }}
-                />
+                <View style={{ width: MEAL_CARD_WIDTH }}>
+                  <MealCard
+                    mealType={mealType}
+                    recipe={todayPlan.meals[mealType]}
+                    members={profiles}
+                    onPress={() => {
+                      const recipe = todayPlan.meals[mealType]
+                      if (recipe) router.push(`/recipe/${recipe.id}`)
+                    }}
+                  />
+                </View>
               )}
             />
           ) : (
@@ -282,8 +257,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.cream },
-  syncBanner: { backgroundColor: Colors.infoBlue, padding: Spacing.sm, alignItems: 'center' },
-  syncText: { ...Typography.caption, color: Colors.white },
   scroll: {},
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -293,7 +266,7 @@ const styles = StyleSheet.create({
   greeting: { ...Typography.heading2, color: Colors.warmCharcoal },
   headerIcons: { flexDirection: 'row', gap: Spacing.sm },
   iconBtn: { padding: Spacing.xs },
-  icon: { fontSize: 22 },
+  iconInactive: { opacity: 0.55 },
   scoreSection: { paddingHorizontal: Spacing.md, marginBottom: Spacing.md },
   scoreCard: {
     backgroundColor: Colors.white, borderRadius: BorderRadius.lg, padding: Spacing.lg,

@@ -1,6 +1,8 @@
 import * as SQLite from 'expo-sqlite'
 import { migration001 } from './migrations/001_initial'
 import { migration002 } from './migrations/002_grocery_is_purchased'
+import { migration003 } from './migrations/003_grocery_notes'
+import { migration004 } from './migrations/004_clear_seed_image_urls'
 
 let db: SQLite.SQLiteDatabase | null = null
 
@@ -63,6 +65,28 @@ export async function runMigrations(): Promise<void> {
       ['002_grocery_is_purchased', new Date().toISOString()]
     )
     console.log('[DB] Migration 002_grocery_is_purchased completed')
+  }
+
+  if (!ranNames.has('003_grocery_notes')) {
+    try {
+      await database.execAsync(migration003)
+    } catch {
+      // Column may already exist on fresh installs — safe to ignore
+    }
+    await database.runAsync(
+      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
+      ['003_grocery_notes', new Date().toISOString()]
+    )
+    console.log('[DB] Migration 003_grocery_notes completed')
+  }
+
+  if (!ranNames.has('004_clear_seed_image_urls')) {
+    await database.execAsync(migration004)
+    await database.runAsync(
+      'INSERT INTO migrations (name, run_at) VALUES (?, ?)',
+      ['004_clear_seed_image_urls', new Date().toISOString()]
+    )
+    console.log('[DB] Migration 004_clear_seed_image_urls completed')
   }
 }
 

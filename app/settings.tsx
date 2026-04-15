@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   Alert,
+  Image,
   Linking,
   ScrollView,
   StyleSheet,
@@ -25,6 +26,8 @@ import {
   setPreferOnDevice,
 } from '../src/services/onDeviceLlm'
 import { OnDeviceLLMStatus } from '../src/types/ai'
+import { syncRecipes, isSynced } from '../src/modules/recipes/syncRecipes'
+import { getRecipeCount } from '../src/modules/recipes/recipeDB'
 import Constants from 'expo-constants'
 
 const DIET_OPTIONS: DietPreference[] = ['none', 'mediterranean', 'vegetarian', 'vegan', 'pescatarian', 'keto']
@@ -58,10 +61,15 @@ export default function SettingsScreen() {
   const [downloadProgress, setDownloadProgress] = useState(0)
   const [editingFamilyName, setEditingFamilyName] = useState(false)
   const [familyNameInput, setFamilyNameInput] = useState(familyName)
+  const [isSyncing, setIsSyncing] = useState(false)
+  const [syncProgress, setSyncProgress] = useState(0)
+  const [syncMessage, setSyncMessage] = useState('')
+  const [recipeCount, setRecipeCount] = useState(0)
 
   useEffect(() => {
     getLLMStatus().then(setLlmStatus)
     getPreferOnDevice().then(setPreferOnDeviceState)
+    getRecipeCount().then(setRecipeCount)
   }, [])
 
   const handleDownloadModel = async () => {
@@ -92,6 +100,27 @@ export default function SettingsScreen() {
   const togglePreferOnDevice = async (val: boolean) => {
     setPreferOnDeviceState(val)
     await setPreferOnDevice(val)
+  }
+
+  const handleSyncRecipes = async () => {
+    setIsSyncing(true)
+    setSyncProgress(0)
+    setSyncMessage('')
+    try {
+      await syncRecipes((progress, message) => {
+        setSyncProgress(progress)
+        setSyncMessage(message)
+      })
+      const count = await getRecipeCount()
+      setRecipeCount(count)
+      Alert.alert('¡Sincronización completa!', `Base de datos actualizada con ${count} recetas.`)
+    } catch (e) {
+      Alert.alert('Error de sincronización', e instanceof Error ? e.message : 'Error desconocido')
+    } finally {
+      setIsSyncing(false)
+      setSyncProgress(0)
+      setSyncMessage('')
+    }
   }
 
   const appVersion = Constants.expoConfig?.version ?? '1.0.0'
@@ -228,6 +257,29 @@ export default function SettingsScreen() {
           )}
         </View>
 
+        {/* ── Base de datos de recetas ────────── */}
+        <SectionHeader title="Base de datos de recetas" />
+        <View style={styles.card}>
+          <View style={styles.row}>
+            <Text style={styles.label}>Recetas en local</Text>
+            <Text style={styles.value}>{recipeCount} recetas</Text>
+          </View>
+          <Text style={styles.hint}>Sincroniza para obtener nuevas recetas de TheMealDB. Requiere conexión a internet.</Text>
+          <View style={styles.divider} />
+          {isSyncing ? (
+            <View style={styles.progressContainer}>
+              <View style={styles.progressTrack}>
+                <View style={[styles.progressBar, { width: `${Math.round(syncProgress * 100)}%` }]} />
+              </View>
+              <Text style={styles.progressText}>{Math.round(syncProgress * 100)}% — {syncMessage || 'Sincronizando...'}</Text>
+            </View>
+          ) : (
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleSyncRecipes}>
+              <Text style={styles.primaryBtnText}>🔄 Sincronizar recetas</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* ── Integraciones de salud ──────────── */}
         <SectionHeader title="Integraciones de salud" />
         <View style={styles.card}>
@@ -238,16 +290,16 @@ export default function SettingsScreen() {
         {/* ── Supermercados ───────────────────── */}
         <SectionHeader title="Supermercados" />
         <View style={styles.card}>
-          {[
-            { name: 'Amazon', emoji: '📦', active: true },
-            { name: 'Mercadona', emoji: '🛍️', active: false },
-            { name: 'Carrefour', emoji: '🏪', active: false },
-            { name: 'Alcampo', emoji: '🛒', active: false },
-            { name: 'DIA', emoji: '🏬', active: false },
-            { name: 'Lidl', emoji: '🏷️', active: false },
-          ].map((r) => (
+          {([
+            { name: 'Amazon',    image: require('../assets/retailers/amazon.png'),    active: true },
+            { name: 'Mercadona', image: require('../assets/retailers/mercadona.png'), active: false },
+            { name: 'Carrefour', image: require('../assets/retailers/carrefour.png'), active: false },
+            { name: 'Alcampo',   image: require('../assets/retailers/Alcampo.png'),   active: false },
+            { name: 'DIA',       image: require('../assets/retailers/dia.png'),        active: false },
+            { name: 'Lidl',      image: require('../assets/retailers/lidl.png'),       active: false },
+          ] as const).map((r) => (
             <View key={r.name} style={styles.retailerRow}>
-              <Text style={styles.retailerEmoji}>{r.emoji}</Text>
+              <Image source={r.image} style={styles.retailerImage} resizeMode="contain" />
               <Text style={styles.retailerName}>{r.name}</Text>
               {r.active ? (
                 <View style={styles.connectedBadge}><Text style={styles.connectedText}>Activo</Text></View>
@@ -493,7 +545,7 @@ const styles = StyleSheet.create({
   progressText: { ...Typography.caption, color: Colors.light.textSecondary },
   comingSoon: { ...Typography.body, color: Colors.light.textMuted, paddingVertical: Spacing.xs },
   retailerRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.sm, paddingVertical: Spacing.xs },
-  retailerEmoji: { fontSize: 24 },
+  retailerImage: { width: 36, height: 36, borderRadius: 6 },
   retailerName: { ...Typography.bodyLarge, color: Colors.warmCharcoal, flex: 1 },
   connectedBadge: { backgroundColor: `${Colors.healthGreen}20`, paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.pill },
   connectedText: { ...Typography.caption, color: Colors.healthGreen },

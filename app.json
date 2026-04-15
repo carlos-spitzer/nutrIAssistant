@@ -10,7 +10,11 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.anonymous.nutrIAssistant"
+      "bundleIdentifier": "com.anonymous.nutrIAssistant",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "NutrIAssistant uses speech recognition so you can ask the AI assistant questions by voice.",
+        "NSMicrophoneUsageDescription": "NutrIAssistant uses the microphone to capture your voice commands for the AI assistant."
+      }
     },
     "android": {
       "adaptiveIcon": {

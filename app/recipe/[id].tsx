@@ -4,6 +4,8 @@ import {
   Alert,
   Animated,
   Image,
+  Modal,
+  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -16,7 +18,7 @@ import * as Haptics from 'expo-haptics'
 import { useRecipeDB } from '../../src/modules/recipes/useRecipeDB'
 import { useInventory } from '../../src/modules/inventory/useInventory'
 import { useGroceries } from '../../src/modules/groceries/useGroceries'
-import { usePlanner } from '../../src/modules/planner/usePlanner'
+import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { Recipe, RecipeIngredient } from '../../src/types/recipes'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
@@ -32,7 +34,7 @@ export default function RecipeDetailScreen() {
   const { getById, favorite } = useRecipeDB()
   const { items: inventory, decrementIngredients } = useInventory()
   const { addItem: addToGroceries } = useGroceries()
-  const { weekPlans, loadWeek } = usePlanner()
+  const { setMealForDate, removeMealFromDate } = usePlanner()
   const { profiles } = useProfiles()
 
   const [recipe, setRecipe] = useState<Recipe | null>(null)
@@ -41,6 +43,9 @@ export default function RecipeDetailScreen() {
   const [instructionsExpanded, setInstructionsExpanded] = useState(false)
   const [addedToCart, setAddedToCart] = useState<Set<string>>(new Set())
   const [isFavorite, setIsFavorite] = useState(false)
+  const [planModalVisible, setPlanModalVisible] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toISOString().split('T')[0])
+  const [selectedMeal, setSelectedMeal] = useState<'breakfast' | 'lunch' | 'dinner'>('lunch')
 
   const scrollY = useRef(new Animated.Value(0)).current
 
@@ -116,25 +121,25 @@ export default function RecipeDetailScreen() {
   const handleAddToPlan = async () => {
     if (!recipe) return
     await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setSelectedDate(new Date().toISOString().split('T')[0])
+    setSelectedMeal('lunch')
+    setPlanModalVisible(true)
+  }
+
+  const confirmAddToPlan = async () => {
+    if (!recipe) return
+    await setMealForDate(selectedDate, selectedMeal, recipe)
+    setPlanModalVisible(false)
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     Alert.alert(
-      'Añadir al plan',
-      '¿En qué comida quieres añadir esta receta?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Desayuno',
-          onPress: () => Alert.alert('¡Añadido!', `${recipe.name} añadida al desayuno de hoy.`),
-        },
-        {
-          text: 'Comida',
-          onPress: () => Alert.alert('¡Añadido!', `${recipe.name} añadida a la comida de hoy.`),
-        },
-        {
-          text: 'Cena',
-          onPress: () => Alert.alert('¡Añadido!', `${recipe.name} añadida a la cena de hoy.`),
-        },
-      ]
+      '¡Añadido al plan!',
+      `${recipe.name} añadida a ${MEAL_LABELS[selectedMeal].toLowerCase()} del ${formatDateLabel(selectedDate, true)}.`
     )
+  }
+
+  const handleRemoveFromPlan = async (date: string, mealType: 'breakfast' | 'lunch' | 'dinner') => {
+    await removeMealFromDate(date, mealType)
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
   }
 
   const handleCookNow = async () => {
@@ -195,6 +200,13 @@ export default function RecipeDetailScreen() {
   const totalTime = recipe.prepTime + recipe.cookTime
   const missingCount = recipe.ingredients.filter((i) => !ingredientInPantry(i)).length
   const pantryCount = recipe.ingredients.length - missingCount
+
+  // Build next 7 days for the plan picker
+  const nextDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date()
+    d.setDate(d.getDate() + i)
+    return d.toISOString().split('T')[0]
+  })
 
   return (
     <View style={styles.container}>
@@ -369,16 +381,26 @@ export default function RecipeDetailScreen() {
               <Text style={styles.sectionLabel}>
                 Ingredientes ({recipe.ingredients.length})
               </Text>
-              <Text style={styles.pantryStatus}>
-                {pantryCount}/{recipe.ingredients.length} en despensa
-              </Text>
+              {recipe.ingredients.length > 0 && (
+                <Text style={styles.pantryStatus}>
+                  {pantryCount}/{recipe.ingredients.length} en despensa
+                </Text>
+              )}
             </View>
 
-            {recipe.ingredients.map((ingredient) => {
+            {recipe.ingredients.length === 0 && (
+              <View style={styles.noIngredientsNote}>
+                <Text style={styles.noIngredientsText}>
+                  Esta receta fue generada por la IA sin lista de ingredientes detallada. Pide a NutriBot los ingredientes necesarios.
+                </Text>
+              </View>
+            )}
+
+            {recipe.ingredients.map((ingredient, index) => {
               const inPantry = ingredientInPantry(ingredient)
               const inCart = addedToCart.has(ingredient.name)
               return (
-                <View key={ingredient.name} style={styles.ingredientRow}>
+                <View key={`${ingredient.name}-${index}`} style={styles.ingredientRow}>
                   <View style={[styles.ingredientDot, inPantry && styles.ingredientDotPantry, ingredient.isAllergen && styles.ingredientDotAllergen]} />
                   <View style={styles.ingredientInfo}>
                     <Text style={styles.ingredientName}>{ingredient.name}</Text>
@@ -458,20 +480,104 @@ export default function RecipeDetailScreen() {
         </View>
       </Animated.ScrollView>
 
+      {/* Add to Plan Modal */}
+      <Modal
+        visible={planModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPlanModalVisible(false)}
+      >
+        <Pressable style={styles.modalOverlay} onPress={() => setPlanModalVisible(false)}>
+          <Pressable style={styles.modalCard} onPress={() => {}}>
+            <Text style={styles.modalTitle}>Añadir al plan semanal</Text>
+            <Text style={styles.modalRecipeName} numberOfLines={1}>{recipe.name}</Text>
+
+            {/* Day selector */}
+            <Text style={styles.modalSectionLabel}>Día</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.dayScroll}>
+              {nextDays.map((date) => (
+                <TouchableOpacity
+                  key={date}
+                  style={[styles.dayPill, selectedDate === date && styles.dayPillSelected]}
+                  onPress={() => setSelectedDate(date)}
+                >
+                  <Text style={[styles.dayPillLabel, selectedDate === date && styles.dayPillLabelSelected]}>
+                    {formatDateLabel(date, false)}
+                  </Text>
+                  <Text style={[styles.dayPillDate, selectedDate === date && styles.dayPillLabelSelected]}>
+                    {new Date(date + 'T12:00:00').getDate()}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            {/* Meal selector */}
+            <Text style={styles.modalSectionLabel}>Comida</Text>
+            <View style={styles.mealRow}>
+              {(['breakfast', 'lunch', 'dinner'] as const).map((m) => (
+                <TouchableOpacity
+                  key={m}
+                  style={[styles.mealBtn, selectedMeal === m && styles.mealBtnSelected]}
+                  onPress={() => setSelectedMeal(m)}
+                >
+                  <Text style={styles.mealBtnEmoji}>{MEAL_EMOJIS[m]}</Text>
+                  <Text style={[styles.mealBtnLabel, selectedMeal === m && styles.mealBtnLabelSelected]}>
+                    {MEAL_LABELS[m]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Confirm / Cancel */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setPlanModalVisible(false)}>
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalConfirmBtn} onPress={confirmAddToPlan}>
+                <Text style={styles.modalConfirmText}>Añadir</Text>
+              </TouchableOpacity>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Sticky Action Bar */}
       <View style={styles.actionBar}>
         <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleAddToPlan}>
-          <Text style={styles.actionBtnSecondaryText}>📅 Plan</Text>
+          <Text style={styles.actionBtnSecondaryText}>Plan</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtnSecondary} onPress={handleAddAllMissingToCart}>
-          <Text style={styles.actionBtnSecondaryText}>🛒 Compra</Text>
+          <Text style={styles.actionBtnSecondaryText}>Compra</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.actionBtnPrimary} onPress={handleCookNow}>
-          <Text style={styles.actionBtnPrimaryText}>👨‍🍳 Cocinar</Text>
+          <Text style={styles.actionBtnPrimaryText}>Cocinar</Text>
         </TouchableOpacity>
       </View>
     </View>
   )
+}
+
+const MEAL_LABELS: Record<'breakfast' | 'lunch' | 'dinner', string> = {
+  breakfast: 'Desayuno',
+  lunch: 'Comida',
+  dinner: 'Cena',
+}
+const MEAL_EMOJIS: Record<'breakfast' | 'lunch' | 'dinner', string> = {
+  breakfast: '🌅',
+  lunch: '☀️',
+  dinner: '🌙',
+}
+const DAY_NAMES_ES = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+
+function formatDateLabel(dateStr: string, long: boolean): string {
+  const today = new Date().toISOString().split('T')[0]
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0]
+  if (dateStr === today) return long ? 'hoy' : 'Hoy'
+  if (dateStr === tomorrow) return long ? 'mañana' : 'Mañana'
+  const d = new Date(dateStr + 'T12:00:00')
+  return long
+    ? `el ${DAY_NAMES_ES[d.getDay()]} ${d.getDate()}`
+    : DAY_NAMES_ES[d.getDay()]
 }
 
 function StatChip({ icon, label, sub }: { icon: string; label: string; sub: string }) {
@@ -644,6 +750,17 @@ const styles = StyleSheet.create({
   },
   addAllMissingText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
 
+  // No-ingredients fallback
+  noIngredientsNote: {
+    backgroundColor: `${Colors.goldenAmber}15`,
+    borderRadius: BorderRadius.md,
+    padding: Spacing.sm,
+    borderWidth: 1,
+    borderColor: `${Colors.goldenAmber}40`,
+    marginBottom: Spacing.sm,
+  },
+  noIngredientsText: { ...Typography.body, color: Colors.warmCharcoal, fontStyle: 'italic' },
+
   // Instructions
   instructionsPreview: { ...Typography.body, color: Colors.light.textSecondary, fontStyle: 'italic' },
   stepRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm },
@@ -653,6 +770,50 @@ const styles = StyleSheet.create({
   },
   stepNumberText: { ...Typography.caption, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
   stepText: { ...Typography.body, color: Colors.warmCharcoal, flex: 1, lineHeight: 22 },
+
+  // Add to Plan modal
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.45)',
+    alignItems: 'center', justifyContent: 'center', padding: Spacing.lg,
+  },
+  modalCard: {
+    backgroundColor: Colors.cream, borderRadius: BorderRadius.xl,
+    padding: Spacing.lg, width: '100%', ...Shadows.elevated,
+  },
+  modalTitle: { ...Typography.heading2, color: Colors.warmCharcoal, marginBottom: 4 },
+  modalRecipeName: { ...Typography.body, color: Colors.light.textSecondary, marginBottom: Spacing.md },
+  modalSectionLabel: { ...Typography.overline, color: Colors.light.textSecondary, marginBottom: Spacing.xs },
+  dayScroll: { marginBottom: Spacing.md },
+  dayPill: {
+    alignItems: 'center', paddingHorizontal: Spacing.sm, paddingVertical: Spacing.xs,
+    borderRadius: BorderRadius.pill, borderWidth: 1, borderColor: Colors.light.border,
+    marginRight: Spacing.xs, backgroundColor: Colors.white, minWidth: 52,
+  },
+  dayPillSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
+  dayPillLabel: { ...Typography.overline, color: Colors.light.textSecondary },
+  dayPillDate: { ...Typography.heading3, color: Colors.warmCharcoal, fontSize: 16 },
+  dayPillLabelSelected: { color: Colors.white },
+  mealRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.lg },
+  mealBtn: {
+    flex: 1, alignItems: 'center', paddingVertical: Spacing.sm,
+    borderRadius: BorderRadius.lg, borderWidth: 1, borderColor: Colors.light.border,
+    backgroundColor: Colors.white,
+  },
+  mealBtnSelected: { backgroundColor: Colors.healthGreen, borderColor: Colors.healthGreen },
+  mealBtnEmoji: { fontSize: 20, marginBottom: 4 },
+  mealBtnLabel: { ...Typography.caption, color: Colors.warmCharcoal },
+  mealBtnLabelSelected: { color: Colors.white, fontFamily: Typography.heading3.fontFamily },
+  modalActions: { flexDirection: 'row', gap: Spacing.sm },
+  modalCancelBtn: {
+    flex: 1, padding: Spacing.sm, borderRadius: BorderRadius.pill,
+    backgroundColor: Colors.softMint, alignItems: 'center',
+  },
+  modalCancelText: { ...Typography.body, color: Colors.warmCharcoal },
+  modalConfirmBtn: {
+    flex: 2, padding: Spacing.sm, borderRadius: BorderRadius.pill,
+    backgroundColor: Colors.healthGreen, alignItems: 'center',
+  },
+  modalConfirmText: { ...Typography.bodyLarge, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
 
   // Action bar
   actionBar: {

@@ -1,109 +1,57 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useRef } from 'react'
 import {
-  Animated,
-  Easing,
   Image,
   Platform,
   StyleSheet,
-  Text,
   TouchableOpacity,
   View,
 } from 'react-native'
 import { BottomTabBarProps } from '@react-navigation/bottom-tabs'
 import BottomSheet from '@gorhom/bottom-sheet'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { Colors, Spacing, Shadows, Typography } from '../../theme'
+import { Ionicons } from '@expo/vector-icons'
+import { Colors, Spacing, Shadows } from '../../theme'
 import { AIAssistant } from './AIAssistant'
 
-const TAB_ICONS: Record<string, string> = {
-  index: '🏠',
-  nutrition: '🥗',
-  recipes: '🍳',
-  groceries: '🛒',
+type IoniconsName = React.ComponentProps<typeof Ionicons>['name']
+
+const TAB_ICONS: Record<string, { default: IoniconsName; active: IoniconsName }> = {
+  index:      { default: 'home-outline',       active: 'home' },
+  nutrition:  { default: 'calendar-outline',   active: 'calendar' },
+  recipes:    { default: 'book-outline',       active: 'book' },
+  groceries:  { default: 'cart-outline',       active: 'cart' },
 }
 
-const TAB_LABELS: Record<string, string> = {
-  index: 'Inicio',
-  nutrition: 'Nutrición',
-  recipes: 'Recetas',
-  groceries: 'Compra',
-}
+const ICON_COLOR_DEFAULT = Colors.warmCharcoal
+const ICON_COLOR_ACTIVE  = Colors.forestGreen
 
 export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets()
   const assistantRef = useRef<BottomSheet>(null)
-  const pulseAnim = useRef(new Animated.Value(1)).current
-  const pulseOpacity = useRef(new Animated.Value(0.5)).current
 
-  // Idle pulse animation on the AI button
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.parallel([
-          Animated.timing(pulseAnim, {
-            toValue: 1.15,
-            duration: 1200,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseOpacity, {
-            toValue: 0,
-            duration: 1200,
-            useNativeDriver: true,
-          }),
-        ]),
-        Animated.parallel([
-          Animated.timing(pulseAnim, {
-            toValue: 1,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-          Animated.timing(pulseOpacity, {
-            toValue: 0.5,
-            duration: 0,
-            useNativeDriver: true,
-          }),
-        ]),
-      ])
+  const openAssistant = () => assistantRef.current?.expand()
+
+  const renderTab = (route: typeof state.routes[0], index: number) => {
+    const isFocused = state.index === index
+    const icons = TAB_ICONS[route.name]
+    return (
+      <TabButton
+        key={route.key}
+        iconName={isFocused ? icons?.active ?? 'ellipse' : icons?.default ?? 'ellipse-outline'}
+        isFocused={isFocused}
+        onPress={() => { if (!isFocused) navigation.navigate(route.name) }}
+      />
     )
-    loop.start()
-    return () => loop.stop()
-  }, [])
-
-  const openAssistant = () => {
-    assistantRef.current?.expand()
   }
 
   return (
     <>
       <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         <View style={styles.tabBar}>
-          {/* Left two tabs */}
-          {state.routes.slice(0, 2).map((route, index) => {
-            const isFocused = state.index === index
-            return (
-              <TabButton
-                key={route.key}
-                icon={TAB_ICONS[route.name] ?? '•'}
-                label={TAB_LABELS[route.name] ?? route.name}
-                isFocused={isFocused}
-                onPress={() => {
-                  if (!isFocused) {
-                    navigation.navigate(route.name)
-                  }
-                }}
-              />
-            )
-          })}
+          {state.routes.slice(0, 2).map((route, index) => renderTab(route, index))}
 
           {/* Center AI button */}
           <View style={styles.centerContainer}>
-            <Animated.View
-              style={[
-                styles.aiPulse,
-                { transform: [{ scale: pulseAnim }], opacity: pulseOpacity },
-              ]}
-            />
             <TouchableOpacity
               style={styles.aiButton}
               onPress={openAssistant}
@@ -117,24 +65,7 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
             </TouchableOpacity>
           </View>
 
-          {/* Right two tabs */}
-          {state.routes.slice(2).map((route, index) => {
-            const actualIndex = index + 2
-            const isFocused = state.index === actualIndex
-            return (
-              <TabButton
-                key={route.key}
-                icon={TAB_ICONS[route.name] ?? '•'}
-                label={TAB_LABELS[route.name] ?? route.name}
-                isFocused={isFocused}
-                onPress={() => {
-                  if (!isFocused) {
-                    navigation.navigate(route.name)
-                  }
-                }}
-              />
-            )
-          })}
+          {state.routes.slice(2).map((route, index) => renderTab(route, index + 2))}
         </View>
       </View>
 
@@ -147,13 +78,11 @@ export function CustomTabBar({ state, descriptors, navigation }: BottomTabBarPro
 }
 
 function TabButton({
-  icon,
-  label,
+  iconName,
   isFocused,
   onPress,
 }: {
-  icon: string
-  label: string
+  iconName: IoniconsName
   isFocused: boolean
   onPress: () => void
 }) {
@@ -163,8 +92,12 @@ function TabButton({
       onPress={onPress}
       activeOpacity={0.7}
     >
-      <Text style={[styles.tabIcon, isFocused && styles.tabIconActive]}>{icon}</Text>
-      <Text style={[styles.tabLabel, isFocused && styles.tabLabelActive]}>{label}</Text>
+      <Ionicons
+        name={iconName}
+        size={26}
+        color={isFocused ? ICON_COLOR_ACTIVE : ICON_COLOR_DEFAULT}
+        style={isFocused ? undefined : styles.iconInactive}
+      />
     </TouchableOpacity>
   )
 }
@@ -181,64 +114,44 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.08,
         shadowRadius: 8,
       },
-      android: {
-        elevation: 8,
-      },
+      android: { elevation: 8 },
     }),
   },
   tabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 60,
+    height: 56,
     paddingHorizontal: Spacing.sm,
   },
   tabButton: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: Spacing.xs,
-    gap: 2,
   },
-  tabIcon: {
-    fontSize: 22,
-    opacity: 0.5,
-  },
-  tabIconActive: {
-    opacity: 1,
-  },
-  tabLabel: {
-    ...Typography.caption,
-    color: Colors.light.tabBarInactive,
-  },
-  tabLabelActive: {
-    color: Colors.forestGreen,
-    fontFamily: Typography.heading3.fontFamily,
+  iconInactive: {
+    opacity: 0.45,
   },
   centerContainer: {
     width: 80,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  aiPulse: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: Colors.healthGreen,
-  },
   aiButton: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: Colors.healthGreen,
+    backgroundColor: Colors.cream,
     alignItems: 'center',
     justifyContent: 'center',
     bottom: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.healthGreen,
+    overflow: 'hidden',
     ...Shadows.elevated,
   },
   aiLogo: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
   },
 })

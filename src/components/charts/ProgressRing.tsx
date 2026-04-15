@@ -83,12 +83,12 @@ export function ProgressRing({
         />
       </Svg>
       {(displayText || sublabel) && (
-        <View style={styles.textContainer}>
+        <View style={[styles.textContainer, { paddingHorizontal: strokeWidth * 1.5 }]}>
           {displayText ? (
-            <Text style={[styles.label, { fontSize: size > 80 ? 20 : 12 }]}>{displayText}</Text>
+            <Text style={[styles.label, { fontSize: size > 80 ? 20 : 12 }]} numberOfLines={1} adjustsFontSizeToFit>{displayText}</Text>
           ) : null}
           {sublabel ? (
-            <Text style={styles.sublabel}>{sublabel}</Text>
+            <Text style={styles.sublabel} numberOfLines={2} adjustsFontSizeToFit>{sublabel}</Text>
           ) : null}
         </View>
       )}

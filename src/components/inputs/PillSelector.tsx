@@ -1,10 +1,10 @@
 import React, { useRef } from 'react'
 import {
+  Dimensions,
   FlatList,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
 } from 'react-native'
 import { Colors, Typography, Spacing, BorderRadius } from '../../theme'
 
@@ -21,6 +21,15 @@ interface PillSelectorProps {
   style?: object
 }
 
+const H_PADDING = Spacing.md  // 16 — padding on each side of the list
+const GAP = Spacing.sm         // 8 — gap between pills
+const VISIBLE_ITEMS = 4        // how many pills to show at once
+
+const screenWidth = Dimensions.get('window').width
+// Total space taken by gaps between the 4 visible pills
+const totalGaps = (VISIBLE_ITEMS - 1) * GAP
+const PILL_WIDTH = (screenWidth - H_PADDING * 2 - totalGaps) / VISIBLE_ITEMS
+
 export function PillSelector({ options, selectedId, onSelect, style }: PillSelectorProps) {
   const ref = useRef<FlatList>(null)
 
@@ -32,6 +41,8 @@ export function PillSelector({ options, selectedId, onSelect, style }: PillSelec
       data={options}
       keyExtractor={(item) => item.id}
       contentContainerStyle={[styles.container, style]}
+      snapToInterval={PILL_WIDTH + GAP}
+      decelerationRate="fast"
       renderItem={({ item }) => {
         const isActive = item.id === selectedId
         return (
@@ -56,32 +67,32 @@ export function PillSelector({ options, selectedId, onSelect, style }: PillSelec
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: Spacing.md,
-    gap: Spacing.sm,
+    paddingHorizontal: H_PADDING,
+    gap: GAP,
   },
   pill: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.pill,
+    width: PILL_WIDTH,
+    height: 64,
+    borderRadius: BorderRadius.lg,
     backgroundColor: Colors.softMint,
     alignItems: 'center',
-    minWidth: 56,
+    justifyContent: 'center',
   },
   pillActive: {
     backgroundColor: Colors.healthGreen,
   },
   label: {
-    ...Typography.body,
+    ...Typography.bodyLarge,
     color: Colors.warmCharcoal,
-    fontFamily: Typography.body.fontFamily,
+    fontFamily: Typography.heading3.fontFamily,
   },
   labelActive: {
     color: Colors.white,
-    fontFamily: Typography.heading3.fontFamily,
   },
   sublabel: {
-    ...Typography.caption,
+    ...Typography.body,
     color: Colors.light.textSecondary,
+    fontFamily: Typography.heading3.fontFamily,
   },
   sublabelActive: {
     color: `${Colors.white}CC`,

@@ -120,7 +120,6 @@ const styles = StyleSheet.create({
     padding: Spacing.md,
     gap: Spacing.md,
     ...Shadows.card,
-    minWidth: 260,
   },
   header: {
     flexDirection: 'row',

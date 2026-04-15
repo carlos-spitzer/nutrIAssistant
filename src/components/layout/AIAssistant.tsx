@@ -8,11 +8,9 @@ import React, {
 import {
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
   Animated,
@@ -20,7 +18,7 @@ import {
   TextStyle,
   PermissionsAndroid,
 } from 'react-native'
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet'
+import BottomSheet, { BottomSheetFlatList, BottomSheetScrollView, BottomSheetTextInput } from '@gorhom/bottom-sheet'
 import * as Speech from 'expo-speech'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../theme'
 import { AIMessage } from '../../types/ai'
@@ -48,12 +46,6 @@ interface AIAssistantProps {
   onClose?: () => void
 }
 
-const SUGGESTIONS = [
-  '¿Qué puedo cocinar esta noche?',
-  '¿Esta receta es apta para Ginny?',
-  '¿Qué hay en mi despensa?',
-  'Crea un menú saludable para esta semana',
-]
 
 export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
   function AIAssistant({ onClose }, ref) {
@@ -62,7 +54,7 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
     const [isSpeakerOn, setIsSpeakerOn] = useState(false)
     const [isListening, setIsListening] = useState(false)
     const [voiceError, setVoiceError] = useState<string | null>(null)
-    const listRef = useRef<FlatList>(null)
+    const listRef = useRef<FlatList<AIMessage>>(null)
     const pulseAnim = useRef(new Animated.Value(1)).current
     const micAnim = useRef(new Animated.Value(1)).current
 
@@ -233,7 +225,7 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
       )
     }
 
-    const snapPoints = ['50%', '85%']
+    const snapPoints = ['50%']
 
     return (
       <BottomSheet
@@ -244,8 +236,15 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
         onClose={onClose}
         backgroundStyle={viewStyles.sheetBackground}
         handleIndicatorStyle={viewStyles.handle}
+        keyboardBehavior="interactive"
+        keyboardBlurBehavior="restore"
+        android_keyboardInputMode="adjustResize"
+        enableDynamicSizing={false}
       >
-        <BottomSheetView style={viewStyles.container}>
+        {/* Regular View — NOT BottomSheetView. BottomSheetView is for dynamic
+            sizing; with enableDynamicSizing={false} + fixed snapPoints it
+            breaks flex layout and prevents proper scroll containment. */}
+        <View style={viewStyles.container}>
           {/* Header */}
           <View style={viewStyles.header}>
             <View style={viewStyles.headerLeft}>
@@ -273,85 +272,91 @@ export const AIAssistant = forwardRef<BottomSheet, AIAssistantProps>(
             </View>
           )}
 
-          {/* Messages */}
-          {messages.length === 0 ? (
-            <View style={viewStyles.welcome}>
-              <Text style={textStyles.welcomeEmoji}>👋</Text>
-              <Text style={textStyles.welcomeTitle}>¡Hola, soy NutriBot!</Text>
-              <Text style={textStyles.welcomeText}>
-                Tu asistente de nutrición familiar con IA. Pregúntame sobre recetas, ingredientes, planes de comidas o alérgenos.
-              </Text>
-              <View style={viewStyles.suggestions}>
-                {SUGGESTIONS.map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={viewStyles.suggestion}
-                    onPress={() => sendMessage(s)}
-                  >
-                    <Text style={textStyles.suggestionText}>{s}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-          ) : (
-            <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={(item) => item.id}
-              renderItem={renderMessage}
-              contentContainerStyle={viewStyles.messageList}
-              showsVerticalScrollIndicator={true}
-              indicatorStyle="black"
-            />
-          )}
-
-          {/* Input */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          >
-            <View style={viewStyles.inputContainer}>
-              {/* Voice button */}
-              {Voice && (
-                <Animated.View style={{ transform: [{ scale: micAnim }] }}>
-                  <TouchableOpacity
-                    style={[viewStyles.micBtn, isListening && viewStyles.micBtnActive]}
-                    onPress={handleVoiceInput}
-                    disabled={isResponding}
-                  >
-                    <Text style={textStyles.micIcon}>{isListening ? '⏹' : '🎙️'}</Text>
-                  </TouchableOpacity>
-                </Animated.View>
-              )}
-              <TextInput
-                style={textStyles.input}
-                value={input}
-                onChangeText={setInput}
-                placeholder={isListening ? 'Escuchando...' : 'Pregunta a NutriBot...'}
-                placeholderTextColor={Colors.light.textMuted}
-                multiline
-                maxLength={500}
-                returnKeyType="send"
-                onSubmitEditing={handleSend}
-              />
-              <TouchableOpacity
-                style={[viewStyles.sendBtn, (!input.trim() || isResponding) && viewStyles.sendBtnDisabled]}
-                onPress={handleSend}
-                disabled={!input.trim() || isResponding}
+          {/* Messages — flex:1 so they fill all space between header and input */}
+          <View style={viewStyles.messagesArea}>
+            {messages.length === 0 ? (
+              <BottomSheetScrollView
+                contentContainerStyle={viewStyles.welcome}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
               >
-                <Text style={textStyles.sendIcon}>↑</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </BottomSheetView>
+                <Text style={textStyles.welcomeEmoji}>👋</Text>
+                <Text style={textStyles.welcomeTitle}>¡Hola, soy NutriBot!</Text>
+                <Text style={textStyles.welcomeText}>
+                  Tu asistente de nutrición familiar con IA. Pregúntame sobre recetas, ingredientes, planes de comidas o alérgenos.
+                </Text>
+              </BottomSheetScrollView>
+            ) : (
+              <BottomSheetFlatList
+                ref={listRef}
+                data={messages}
+                keyExtractor={(item) => item.id}
+                renderItem={renderMessage}
+                contentContainerStyle={viewStyles.messageList}
+                showsVerticalScrollIndicator={true}
+                indicatorStyle="black"
+                scrollIndicatorInsets={{ right: 1 }}
+                style={viewStyles.messageListContainer}
+              />
+            )}
+          </View>
+
+          {/* Input — always pinned to the bottom */}
+          <View style={viewStyles.inputContainer}>
+            {Voice && (
+              <Animated.View style={{ transform: [{ scale: micAnim }] }}>
+                <TouchableOpacity
+                  style={[viewStyles.micBtn, isListening && viewStyles.micBtnActive]}
+                  onPress={handleVoiceInput}
+                  disabled={isResponding}
+                >
+                  <Text style={textStyles.micIcon}>{isListening ? '⏹' : '🎙️'}</Text>
+                </TouchableOpacity>
+              </Animated.View>
+            )}
+            <BottomSheetTextInput
+              style={textStyles.input}
+              value={input}
+              onChangeText={setInput}
+              placeholder={isListening ? 'Escuchando...' : 'Pregunta a NutriBot...'}
+              placeholderTextColor={Colors.light.textMuted}
+              multiline
+              maxLength={500}
+              returnKeyType="send"
+              onSubmitEditing={handleSend}
+            />
+            <TouchableOpacity
+              style={[viewStyles.sendBtn, (!input.trim() || isResponding) && viewStyles.sendBtnDisabled]}
+              onPress={handleSend}
+              disabled={!input.trim() || isResponding}
+            >
+              <Text style={textStyles.sendIcon}>↑</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </BottomSheet>
     )
   }
 )
 
 const viewStyles = StyleSheet.create({
-  sheetBackground: { backgroundColor: Colors.cream, borderRadius: 24 } as ViewStyle,
+  sheetBackground: {
+    backgroundColor: Colors.cream,
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 24,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+  } as ViewStyle,
   handle: { backgroundColor: Colors.light.border, width: 40 } as ViewStyle,
-  container: { flex: 1, paddingBottom: Platform.OS === 'ios' ? 34 : 16 } as ViewStyle,
+  container: {
+    flex: 1,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 16,
+    overflow: 'hidden',
+  } as ViewStyle,
   header: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm,
@@ -366,9 +371,9 @@ const viewStyles = StyleSheet.create({
     backgroundColor: `${Colors.errorRed}15`, paddingHorizontal: Spacing.md, paddingVertical: Spacing.xs,
     borderBottomWidth: 1, borderBottomColor: `${Colors.errorRed}30`,
   } as ViewStyle,
-  welcome: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.md } as ViewStyle,
-  suggestions: { gap: Spacing.sm, width: '100%', marginTop: Spacing.md } as ViewStyle,
-  suggestion: { backgroundColor: Colors.softMint, padding: Spacing.sm, borderRadius: BorderRadius.md } as ViewStyle,
+  messagesArea: { flex: 1, overflow: 'hidden' } as ViewStyle,
+  messageListContainer: { flex: 1 } as ViewStyle,
+  welcome: { flexGrow: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: Spacing.xl, gap: Spacing.md, paddingVertical: Spacing.xl } as ViewStyle,
   messageList: { paddingHorizontal: Spacing.md, paddingVertical: Spacing.sm, gap: Spacing.sm } as ViewStyle,
   messageRow: { flexDirection: 'row', gap: Spacing.sm, marginBottom: Spacing.sm, alignItems: 'flex-end' } as ViewStyle,
   messageRowUser: { flexDirection: 'row-reverse' } as ViewStyle,
@@ -380,7 +385,7 @@ const viewStyles = StyleSheet.create({
   bubbleBot: { backgroundColor: Colors.softMint, borderBottomLeftRadius: 4, ...Shadows.subtle } as ViewStyle,
   inputContainer: {
     flexDirection: 'row', alignItems: 'flex-end',
-    paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, gap: Spacing.sm,
+    paddingHorizontal: Spacing.md, paddingTop: Spacing.sm, paddingBottom: Spacing.sm, gap: Spacing.sm,
     borderTopWidth: 1, borderTopColor: Colors.light.border,
   } as ViewStyle,
   micBtn: {
@@ -403,7 +408,6 @@ const textStyles = StyleSheet.create({
   welcomeEmoji: { fontSize: 48 } as TextStyle,
   welcomeTitle: { ...Typography.heading1, color: Colors.warmCharcoal, textAlign: 'center' } as TextStyle,
   welcomeText: { ...Typography.body, color: Colors.light.textSecondary, textAlign: 'center' } as TextStyle,
-  suggestionText: { ...Typography.body, color: Colors.healthGreen } as TextStyle,
   botName: { ...Typography.overline, color: Colors.forestGreen } as TextStyle,
   messageText: { ...Typography.body, color: Colors.warmCharcoal } as TextStyle,
   messageTextUser: { color: Colors.white } as TextStyle,

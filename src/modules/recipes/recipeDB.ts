@@ -86,14 +86,30 @@ export async function getRecipeById(id: string): Promise<Recipe | null> {
   return row ? rowToRecipe(row) : null
 }
 
+// Only recipes from verified, traceable sources are shown to users.
+const VERIFIED_SOURCES = `source_api IN ('themealdb', 'user_created')`
+
 export async function searchRecipes(
   query: string,
   limit = 20
 ): Promise<Recipe[]> {
   const db = await getDatabase()
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM recipes WHERE name LIKE ? OR cuisine LIKE ? LIMIT ?`,
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} AND (name LIKE ? OR cuisine LIKE ?) LIMIT ?`,
     [`%${query}%`, `%${query}%`, limit]
+  )
+  return rows.map(rowToRecipe)
+}
+
+export async function searchVerifiedByCategory(
+  query: string,
+  category: string,
+  limit = 5
+): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} AND category = ? AND name LIKE ? LIMIT ?`,
+    [category, `%${query}%`, limit]
   )
   return rows.map(rowToRecipe)
 }
@@ -104,7 +120,7 @@ export async function getRecipesByCategory(
 ): Promise<Recipe[]> {
   const db = await getDatabase()
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    'SELECT * FROM recipes WHERE category = ? LIMIT ?',
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} AND category = ? LIMIT ?`,
     [category, limit]
   )
   return rows.map(rowToRecipe)
@@ -116,7 +132,7 @@ export async function getRecipesByCuisine(
 ): Promise<Recipe[]> {
   const db = await getDatabase()
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    'SELECT * FROM recipes WHERE cuisine LIKE ? LIMIT ?',
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} AND cuisine LIKE ? LIMIT ?`,
     [`%${cuisine}%`, limit]
   )
   return rows.map(rowToRecipe)
@@ -125,7 +141,7 @@ export async function getRecipesByCuisine(
 export async function getAllRecipes(limit = 50, offset = 0): Promise<Recipe[]> {
   const db = await getDatabase()
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    'SELECT * FROM recipes ORDER BY updated_at DESC LIMIT ? OFFSET ?',
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} ORDER BY updated_at DESC LIMIT ? OFFSET ?`,
     [limit, offset]
   )
   return rows.map(rowToRecipe)
@@ -134,7 +150,7 @@ export async function getAllRecipes(limit = 50, offset = 0): Promise<Recipe[]> {
 export async function getRecipeCount(): Promise<number> {
   const db = await getDatabase()
   const row = await db.getFirstAsync<{ count: number }>(
-    'SELECT COUNT(*) as count FROM recipes'
+    `SELECT COUNT(*) as count FROM recipes WHERE ${VERIFIED_SOURCES}`
   )
   return row?.count ?? 0
 }
@@ -158,15 +174,31 @@ export async function updateRecipeCompatibility(
   )
 }
 
+export async function updateRecipeImageUrl(id: string, imageUrl: string): Promise<void> {
+  const db = await getDatabase()
+  await db.runAsync(
+    'UPDATE recipes SET image_url = ?, updated_at = ? WHERE id = ?',
+    [imageUrl, new Date().toISOString(), id]
+  )
+}
+
+export async function getSeedRecipesWithoutImage(): Promise<Recipe[]> {
+  const db = await getDatabase()
+  const rows = await db.getAllAsync<Record<string, unknown>>(
+    `SELECT * FROM recipes WHERE source_api = 'user_created' AND (image_url IS NULL OR image_url = '')`
+  )
+  return rows.map(rowToRecipe)
+}
+
 export async function getRandomRecipes(
   limit = 6,
   category?: string
 ): Promise<Recipe[]> {
   const db = await getDatabase()
-  const where = category ? 'WHERE category = ?' : ''
+  const categoryClause = category ? `AND category = ?` : ''
   const params = category ? [category, limit] : [limit]
   const rows = await db.getAllAsync<Record<string, unknown>>(
-    `SELECT * FROM recipes ${where} ORDER BY RANDOM() LIMIT ?`,
+    `SELECT * FROM recipes WHERE ${VERIFIED_SOURCES} ${categoryClause} ORDER BY RANDOM() LIMIT ?`,
     params
   )
   return rows.map(rowToRecipe)

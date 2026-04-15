@@ -12,7 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import * as DocumentPicker from 'expo-document-picker'
 import * as FileSystem from 'expo-file-system/legacy'
 import { router } from 'expo-router'
-import { usePlanner } from '../../src/modules/planner/usePlanner'
+import { usePlanner } from '../../src/modules/planner/PlannerContext'
 import { useInventory } from '../../src/modules/inventory/useInventory'
 import { useProfiles } from '../../src/modules/profiles/ProfilesContext'
 import { Colors, Typography, Spacing, BorderRadius, Shadows } from '../../src/theme'
@@ -211,7 +211,7 @@ const styles = StyleSheet.create({
   },
   generateBtnDisabled: { backgroundColor: Colors.light.textMuted },
   generateBtnText: { ...Typography.body, color: Colors.white, fontFamily: Typography.heading3.fontFamily },
-  pillSelectorContent: { paddingVertical: Spacing.sm },
+  pillSelectorContent: { paddingVertical: Spacing.lg },
   scroll: { paddingHorizontal: Spacing.md, paddingTop: Spacing.sm },
   loader: { marginTop: Spacing.xxl },
   schoolBanner: {

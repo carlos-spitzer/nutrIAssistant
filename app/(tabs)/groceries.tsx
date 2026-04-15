@@ -2,7 +2,9 @@ import React, { useState } from 'react'
 import {
   Alert,
   Image,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -170,7 +172,11 @@ export default function GroceriesScreen() {
         animationType="slide"
         onRequestClose={() => setShowAddModal(false)}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setShowAddModal(false)} />
           <View style={styles.modalSheet}>
             <Text style={styles.modalTitle}>Añadir artículo</Text>
             <TextInput
@@ -205,7 +211,7 @@ export default function GroceriesScreen() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </SafeAreaView>
   )
@@ -301,7 +307,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', ...Shadows.elevated,
   },
   fabText: { color: Colors.white, fontSize: 28, lineHeight: 30 },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }, // KAV shrinks this when keyboard appears
   modalSheet: {
     backgroundColor: Colors.cream, borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: Spacing.xl, gap: Spacing.md,

@@ -14,10 +14,12 @@ import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { ProfilesProvider } from '../src/modules/profiles/ProfilesContext'
+import { PlannerProvider } from '../src/modules/planner/PlannerContext'
 import { AIEngineProvider } from '../src/modules/ai-engine/AIContext'
 import { ThemeProvider, useTheme } from '../src/theme/ThemeContext'
 import { runMigrations } from '../src/db/database'
 import { seedRecipesIfNeeded } from '../src/modules/recipes/seedRecipes'
+import { isSynced, syncRecipes, enrichSeedRecipeImages } from '../src/modules/recipes/syncRecipes'
 import { ensureModelAvailable } from '../src/services/onDeviceLlm'
 import { Colors, Typography } from '../src/theme'
 
@@ -26,6 +28,7 @@ function AppShell() {
 
   return (
     <ProfilesProvider>
+      <PlannerProvider>
       <AIEngineProvider>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -35,7 +38,7 @@ function AppShell() {
           />
           <Stack.Screen
             name="settings"
-            options={{ title: 'Ajustes', headerStyle: { backgroundColor: isDark ? '#1a1a1a' : '#FAFAF5' }, headerTintColor: isDark ? '#FAFAF5' : '#2D2D2D' }}
+            options={{ title: 'Ajustes', headerBackTitle: 'Volver', headerStyle: { backgroundColor: isDark ? '#1a1a1a' : '#FAFAF5' }, headerTintColor: isDark ? '#FAFAF5' : '#2D2D2D' }}
           />
           <Stack.Screen
             name="recipe/[id]"
@@ -44,6 +47,7 @@ function AppShell() {
         </Stack>
         <StatusBar style={isDark ? 'light' : 'dark'} />
       </AIEngineProvider>
+      </PlannerProvider>
     </ProfilesProvider>
   )
 }
@@ -66,6 +70,21 @@ export default function RootLayout() {
       try {
         await runMigrations()
         await seedRecipesIfNeeded()
+
+        // Download TheMealDB recipes in the background if the DB is not yet
+        // fully synced (new install or sync version bumped).
+        isSynced().then((synced) => {
+          if (!synced) {
+            console.log('[Init] Starting background TheMealDB sync...')
+            syncRecipes().catch((e) =>
+              console.warn('[Init] Background recipe sync failed:', e)
+            )
+          }
+        })
+
+        // Silently enrich seed recipes that have no image by searching
+        // TheMealDB — runs in the background, never blocks startup.
+        enrichSeedRecipeImages().catch(() => {/* silent */})
       } catch (e) {
         console.error('[Init] Error durante la inicialización:', e)
       }
